@@ -93,7 +93,7 @@ class OwnerController {
 
 	@GetMapping("/owners")
 	public String processFindForm(@RequestParam(defaultValue = "1") int page, Owner owner, BindingResult result,
-			Model model, RedirectAttributes redirectAttributes) {
+			@RequestParam(defaultValue = "") String petType, Model model, RedirectAttributes redirectAttributes) {
 		// allow parameterless GET request for /owners to return all records
 		String lastName = owner.getLastName();
 		if (lastName == null) {
@@ -103,19 +103,29 @@ class OwnerController {
 			lastName = lastName.strip();
 		}
 
-		// find owners by last name
-		Page<Owner> ownersResults = findPaginatedForOwnersLastName(page, lastName);
+		petType = petType.strip();
+		model.addAttribute("petType", petType);
+
+		Page<Owner> ownersResults = petType.isEmpty() ? findPaginatedForOwnersLastName(page, lastName)
+				: findPaginatedForPetType(page, petType);
 		if (page < 1 || page > Math.max(ownersResults.getTotalPages(), 1)) {
 			redirectAttributes.addAttribute("page", 1);
-			if (!lastName.isEmpty()) {
+			if (!petType.isEmpty()) {
+				redirectAttributes.addAttribute("petType", petType);
+			}
+			else if (!lastName.isEmpty()) {
 				redirectAttributes.addAttribute("lastName", lastName);
 			}
 			return "redirect:/owners";
 		}
 
 		if (ownersResults.isEmpty()) {
-			// no owners found
-			result.rejectValue("lastName", "notFound", "not found");
+			if (petType.isEmpty()) {
+				result.rejectValue("lastName", "notFound", "not found");
+			}
+			else {
+				result.reject("notFound", "No owners found for pet type");
+			}
 			return "owners/findOwners";
 		}
 
@@ -143,6 +153,13 @@ class OwnerController {
 		int validatedPage = Math.max(page, 1);
 		Pageable pageable = PageRequest.of(validatedPage - 1, pageSize);
 		return owners.findByLastNameStartingWith(lastname, pageable);
+	}
+
+	private Page<Owner> findPaginatedForPetType(int page, String petType) {
+		int pageSize = 5;
+		int validatedPage = Math.max(page, 1);
+		Pageable pageable = PageRequest.of(validatedPage - 1, pageSize);
+		return owners.findDistinctByPetsTypeName(petType, pageable);
 	}
 
 	@GetMapping("/owners/{ownerId}/edit")

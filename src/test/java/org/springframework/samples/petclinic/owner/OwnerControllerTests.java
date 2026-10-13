@@ -23,6 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.test.context.aot.DisabledInAotMode;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -33,6 +34,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.hasItem;
@@ -194,6 +196,65 @@ class OwnerControllerTests {
 		mockMvc.perform(get("/owners?page=1").param("lastName", "Franklin"))
 			.andExpect(status().is3xxRedirection())
 			.andExpect(view().name("redirect:/owners/" + TEST_OWNER_ID));
+	}
+
+	@Test
+	void processFindFormByPetType() throws Exception {
+		Page<Owner> tasks = new PageImpl<>(List.of(george()));
+		when(this.owners.findDistinctByPetsTypeName(eq("dog"), any(Pageable.class))).thenReturn(tasks);
+
+		mockMvc.perform(get("/owners?page=1").param("petType", " dog "))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(view().name("redirect:/owners/" + TEST_OWNER_ID));
+
+		verify(this.owners).findDistinctByPetsTypeName(eq("dog"), any(Pageable.class));
+	}
+
+	@Test
+	void processFindFormByPetTypePreservesFilterAcrossPages() throws Exception {
+		Page<Owner> tasks = new PageImpl<>(List.of(george(), george(), george(), george(), george()),
+				PageRequest.of(0, 5), 6);
+		when(this.owners.findDistinctByPetsTypeName(eq("dog"), any(Pageable.class))).thenReturn(tasks);
+
+		mockMvc.perform(get("/owners?page=1").param("petType", "dog"))
+			.andExpect(status().isOk())
+			.andExpect(content().string(containsString("page=2&amp;petType=dog")));
+	}
+
+	@Test
+	void processFindFormByPetTypeWithNoMatchingOwners() throws Exception {
+		when(this.owners.findDistinctByPetsTypeName(eq("unknown"), any(Pageable.class)))
+			.thenReturn(new PageImpl<>(List.of()));
+
+		mockMvc.perform(get("/owners?page=1").param("petType", "unknown"))
+			.andExpect(status().isOk())
+			.andExpect(model().attributeHasErrors("owner"))
+			.andExpect(view().name("owners/findOwners"));
+	}
+
+	@Test
+	void processFindFormWithInvalidPetTypeDoesNotFail() throws Exception {
+		when(this.owners.findDistinctByPetsTypeName(eq("' OR 1=1 --"), any(Pageable.class)))
+			.thenReturn(new PageImpl<>(List.of()));
+
+		mockMvc.perform(get("/owners?page=1").param("petType", "' OR 1=1 --"))
+			.andExpect(status().isOk())
+			.andExpect(model().attributeHasErrors("owner"))
+			.andExpect(view().name("owners/findOwners"));
+
+		verify(this.owners).findDistinctByPetsTypeName(eq("' OR 1=1 --"), any(Pageable.class));
+	}
+
+	@Test
+	void processFindFormWithEmptyPetTypeReturnsAllOwners() throws Exception {
+		Page<Owner> tasks = new PageImpl<>(List.of(george(), new Owner()));
+		when(this.owners.findByLastNameStartingWith(eq(""), any(Pageable.class))).thenReturn(tasks);
+
+		mockMvc.perform(get("/owners?page=1").param("petType", "   "))
+			.andExpect(status().isOk())
+			.andExpect(view().name("owners/ownersList"));
+
+		verify(this.owners).findByLastNameStartingWith(eq(""), any(Pageable.class));
 	}
 
 	@Test

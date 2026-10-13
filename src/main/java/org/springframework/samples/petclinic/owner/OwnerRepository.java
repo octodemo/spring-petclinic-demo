@@ -44,6 +44,8 @@ public interface OwnerRepository extends JpaRepository<Owner, Integer> {
 	 */
 	Page<Owner> findByLastNameStartingWith(String lastName, Pageable pageable);
 
+	Page<Owner> findDistinctByPetsTypeName(String petType, Pageable pageable);
+
 	/**
 	 * Retrieve an {@link Owner} from the data store by id.
 	 * <p>

@@ -96,6 +96,15 @@ class ClinicServiceTests {
 	}
 
 	@Test
+	void shouldFindOwnersByPetType() {
+		Page<Owner> owners = this.owners.findDistinctByPetsTypeName("cat", pageable);
+		assertThat(owners).extracting(Owner::getId).containsExactlyInAnyOrder(1, 6, 10);
+
+		owners = this.owners.findDistinctByPetsTypeName("unknown", pageable);
+		assertThat(owners).isEmpty();
+	}
+
+	@Test
 	void shouldFindSingleOwnerWithPet() {
 		Optional<Owner> optionalOwner = this.owners.findById(1);
 		assertThat(optionalOwner).isPresent();
