@@ -11,7 +11,7 @@ on:
 
 jobs:
   build:
-
+    name: Gradle build (Java ${{ matrix.java }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
