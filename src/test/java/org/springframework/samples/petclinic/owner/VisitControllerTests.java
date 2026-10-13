@@ -16,7 +16,9 @@
 
 package org.springframework.samples.petclinic.owner;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
@@ -26,6 +28,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.DisabledInNativeImage;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.test.context.aot.DisabledInAotMode;
@@ -69,6 +72,7 @@ class VisitControllerTests {
 	void initNewVisitForm() throws Exception {
 		mockMvc.perform(get("/owners/{ownerId}/pets/{petId}/visits/new", TEST_OWNER_ID, TEST_PET_ID))
 			.andExpect(status().isOk())
+			.andExpect(model().attribute("minVisitDate", LocalDate.now()))
 			.andExpect(view().name("pets/createOrUpdateVisitForm"));
 	}
 
@@ -84,6 +88,32 @@ class VisitControllerTests {
 	}
 
 	@Test
+	void processNewVisitFormSuccessWhenVisitDateIsToday() throws Exception {
+		mockMvc
+			.perform(post("/owners/{ownerId}/pets/{petId}/visits/new", TEST_OWNER_ID, TEST_PET_ID)
+				.param("name", "George")
+				.param("date", LocalDate.now().toString())
+				.param("description", "Visit Description"))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(view().name("redirect:/owners/{ownerId}"));
+	}
+
+	@Test
+	void processNewVisitFormSuccessWhenDateIsOmitted() throws Exception {
+		mockMvc
+			.perform(post("/owners/{ownerId}/pets/{petId}/visits/new", TEST_OWNER_ID, TEST_PET_ID)
+				.param("name", "George")
+				.param("description", "Visit Description"))
+			.andExpect(status().is3xxRedirection())
+			.andExpect(view().name("redirect:/owners/{ownerId}"));
+
+		ArgumentCaptor<Owner> ownerCaptor = ArgumentCaptor.forClass(Owner.class);
+		verify(owners).save(ownerCaptor.capture());
+		LocalDate savedVisitDate = ownerCaptor.getValue().getPet(TEST_PET_ID).getVisits().iterator().next().getDate();
+		assertEquals(LocalDate.now(), savedVisitDate);
+	}
+
+	@Test
 	void processNewVisitFormHasErrors() throws Exception {
 		mockMvc
 			.perform(post("/owners/{ownerId}/pets/{petId}/visits/new", TEST_OWNER_ID, TEST_PET_ID).param("name",
@@ -94,11 +124,11 @@ class VisitControllerTests {
 	}
 
 	@Test
-	void processNewVisitFormHasErrorsWhenVisitDateIsNotInFuture() throws Exception {
+	void processNewVisitFormHasErrorsWhenVisitDateIsInThePast() throws Exception {
 		mockMvc
 			.perform(post("/owners/{ownerId}/pets/{petId}/visits/new", TEST_OWNER_ID, TEST_PET_ID)
 				.param("name", "George")
-				.param("date", LocalDate.now().toString())
+				.param("date", LocalDate.now().minusDays(1).toString())
 				.param("description", "Visit Description"))
 			.andExpect(model().attributeHasFieldErrors("visit", "date"))
 			.andExpect(model().attributeHasFieldErrorCode("visit", "date", "typeMismatch.visitDate"))
